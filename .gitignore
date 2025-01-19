@@ -1,0 +1,29 @@
+# Archivos de log y salida
+*.log
+*.smcl
+
+# Archivos temporales de Stata
+*.gph
+*.dta~
+
+# Archivos de respaldo
+*.do~
+*.ado~
+*.old
+*.bak
+*.tmp
+
+# Archivos de metadatos y configuraciones locales
+stata.log
+stata.ini
+
+# Archivos generados por Stata cuando se usan gráficos
+*.stp
+
+# Bases de datos intermedias o temporales
+temp_*.dta
+intermediate_*.dta
+
+# Directorios de trabajo específicos
+output/
+graphs/
