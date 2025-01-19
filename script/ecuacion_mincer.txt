@@ -1,0 +1,248 @@
+*** Ubiacion de los archivos de datos 
+*************************************************************
+cd "C:\Users\...\EPH_usu_4to_Trim_2023_xlsx"
+import excel "C:\Users\...\EPH_usu_4to_Trim_2023_xlsx\usu_individual_T423.xlsx", sheet("usu_individual_T423") firstrow
+
+*** Condiciones de restrición a las observaciones de la EPH
+*************************************************************
+*** Jefes de hogar
+drop if CH03 != 01
+*** Hombres
+drop if CH04 != 1
+*** Elimino mayores a 65
+drop if CH06 >65
+*** Elimino menores a 25
+drop if CH06 <25
+*** Personas empleadas asalariadas
+drop if CAT_OCUP !=3
+*** Borrar valores negativos
+drop if P21 <1
+*** Borrar primario incompleto y sin instruccion
+drop if NIVEL_ED == 1 | NIVEL_ED == 7
+
+*** Generar nuevas variables
+*************************************************************
+gen lnw = ln(P21)
+label variable lnw "Logaritmo de los ingresos mensuales de la ocupacion principal"
+
+gen edu = NIVEL_ED
+label variable edu "Educacion"
+
+gen reg = REGION
+label variable reg "Region"
+
+gen est = CH07
+label variable est "Estado civil"
+
+gen eda = CH06
+label variable eda "Edad"
+
+gen eda2 = CH06^2
+label variable eda2 "Edad cuadratica"
+
+*** Regresión
+*************************************************************
+*** Estimacion de Mincer
+regress lnw i.edu i.reg ib5.est eda
+*** Test de Breusch-Pagan para homocedasticidad
+estat hettest
+*** Regresión robusta a la heterocedasticidad de White
+regress lnw i.edu i.reg ib5.est eda, vce(robust)
+*** Estimacion de Mincer con edad cuadratica
+regress lnw i.edu i.reg ib5.est eda eda2
+
+*** Graficar
+*************************************************************
+*** Graficar
+gen efecto_edad_1 = 12.03538 + .0022167*eda
+gen efecto_edad_2 = 11.45729 + .0302018*eda + -.0003148*eda2
+sort eda
+line efecto_edad_1 efecto_edad_2 eda, ytitle("ln(w)") legend(order(1 "efecto modelo lineal" 2 "efecto modelo cuadratico"))
+
+*** Edad maxima
+*************************************************************
+*** Calcular la edad asociada con el máximo salario
+* lnw b0 +b1*eda +b2* eda2
+* d lnw / d eda = b1* + 2*b2*eda
+* edad_max = - b1 / 2*b2
+display -.0302018/(2*-.0003148)
+*** Mediante funcion nlcom
+nlcom -_b[eda] / (2*_b[eda2])
+*** Contraste con 50 años de edad lineal
+test _b[eda] + 2*50*_b[eda2]==0
+*** Contraste con 50 años de edad no lineal
+testnl (-_b[eda] / (2*_b[eda2])) = 50
+
+*** Metodo delta
+*************************************************************
+***Obtener el vector de coeficientes
+matrix b = e(b)
+***Calcular los coeficientes relevantes
+scalar b_eda = b[1, "eda"]
+scalar b_eda2 = b[1, "eda2"]
+
+***Calcular la edad máxima
+scalar edad_max = -b_eda / (2 * b_eda2)
+display edad_max
+
+***Calcular el gradiente
+matrix G = ( -1/(2 * b_eda2), b_eda / (2 * b_eda2^2) )
+
+***Obener la matriz de varianza-covarianza
+matrix V = e(V)
+***Extraer la submatriz de varianza-covarianza relevante
+matrix V_sub = ( V["eda","eda"], V["eda","eda2"] \ V["eda2","eda"], V["eda2","eda2"] )
+
+***Calcular la varianza asintótica usando el método delta
+matrix Var_delta = G * V_sub * G'
+matrix list Var_delta
+
+*** Calcular el intervalo de confianza (95%)
+scalar z_value = 1.96
+scalar ic_min = edad_max - z_value * sqrt(Var_delta[1,1])
+scalar ic_max = edad_max + z_value * sqrt(Var_delta[1,1])
+display "Intervalo de confianza: [" ic_min ", " ic_max "]"
+
+*************************************************************
+*** Regresion por quantiles
+ssc install grqreg
+xi: sqreg lnw i.edu i.reg i.est eda, q(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+grqreg, ci
+
+*************************************************************
+clear all
+
+*************************************************************
+cd "C:\Users\santi\Dropbox\Facultad\UBA\Primer trimestre\Econometría I\Primera parte\TP1\EPH_usu_4to_Trim_2023_xlsx"
+import excel "C:\Users\santi\Dropbox\Facultad\UBA\Primer trimestre\Econometría I\Primera parte\TP1\EPH_usu_4to_Trim_2023_xlsx\usu_individual_T423.xlsx", sheet("usu_individual_T423") firstrow
+
+*** Condiciones de restrición a las observaciones de la EPH
+*************************************************************
+*** Jefes de hogar
+drop if CH03 != 01
+*** Hombres
+drop if CH04 != 1
+*** Elimino mayores a 65
+drop if CH06 >65
+*** Elimino menores a 25
+drop if CH06 <25
+*** Individuos de la fuerza laboral (empleados y desempleados)
+drop if ESTADO == 0 | ESTADO == 3 | ESTADO == 4
+*** Borrar valores negativos
+drop if P21 <0
+*** Borrar primario incompleto y sin instruccion
+drop if NIVEL_ED == 1 | NIVEL_ED == 7
+
+*** Generar nuevas variables
+*************************************************************
+gen lnw = ln(P21)
+label variable lnw "Logaritmo de los ingresos mensuales de la ocupacion principal"
+
+gen edu = NIVEL_ED
+label variable edu "Educacion"
+
+gen reg = REGION
+label variable reg "Region"
+
+gen est = CH07
+label variable est "Estado civil"
+
+gen eda = CH06
+label variable eda "Edad"
+
+gen eda2 = CH06^2
+label variable eda2 "Edad cuadratica"
+
+gen ocup=lnw~=.
+label variable ocup "si=1, no=0"
+
+*** Regresión
+*************************************************************
+*** Modelo de probabilidad lineal
+regress ocup i.edu i.reg ib5.est eda eda2
+*** Verificar la probabilidad
+predict prob
+summ prob
+
+*** Regresion probit
+probit ocup i.edu i.reg ib5.est eda eda2
+*** Calculo de efectos marginales
+margins, dydx(edu)
+margins, dydx(est)
+
+*** Regresion logit
+logit ocup i.edu i.reg ib5.est eda eda2
+
+
+*** Modelo de seleccion de Heckman
+heckman lnw i.edu i.reg ib5.est eda eda2, select(ocup = i.edu i.reg ib5.est eda eda2)
+
+clear all
+
+*************************************************************
+cd "C:\Users\santi\Dropbox\Facultad\UBA\Primer trimestre\Econometría I\Primera parte\TP1\EPH_usu_4to_Trim_2023_xlsx"
+import excel "C:\Users\santi\Dropbox\Facultad\UBA\Primer trimestre\Econometría I\Primera parte\TP1\EPH_usu_4to_Trim_2023_xlsx\usu_individual_T423.xlsx", sheet("usu_individual_T423") firstrow
+
+*** Condiciones de restrición a las observaciones de la EPH
+*************************************************************
+*** Jefes de hogar
+drop if CH03 != 01
+*** Hombres
+drop if CH04 != 1
+*** Elimino mayores a 65
+drop if CH06 >65
+*** Elimino menores a 25
+drop if CH06 <25
+*** Solo las personas que trabajan full-time (mas de 35 horas semanales)
+drop if PP3E_TOT<36
+drop if PP3E_TOT>99
+drop if missing(PP3E_TOT)
+*** Borrar primario incompleto y sin instruccion
+drop if NIVEL_ED == 1 | NIVEL_ED == 7
+
+*** Generar nuevas variables
+*************************************************************
+gen edu = NIVEL_ED
+label variable edu "Educacion"
+
+gen reg = REGION
+label variable reg "Region"
+
+gen est = CH07
+label variable est "Estado civil"
+
+gen eda = CH06
+label variable eda "Edad"
+
+gen eda2 = CH06^2
+label variable eda2 "Edad cuadratica"
+
+gen CE = .
+replace CE = 0 if PP07H == 2 & PP07I == 2
+replace CE = 1 if PP07H == 2 & PP07I == 1
+replace CE = 2 if PP07H == 1
+label variable CE "Caracteristicas del empleo"
+drop if missing(CE)
+
+*** Regresión
+*************************************************************
+*** Modelo logit
+mlogit CE i.edu i.reg ib5.est eda eda2, baseoutcome(0)
+*** Modelo oprobit
+oprobit CE i.edu i.reg ib5.est eda eda2
+
+*** Calcular las probabilidades predichas para cada nivel de educación
+margins edu, predict(outcome(0))
+margins edu, predict(outcome(1))
+margins edu, predict(outcome(2))
+
+*** Obtener las probabilidades marginales para cada categoría de CE y graficar
+margins edu, predict(outcome(0))
+marginsplot, xdimension(edu)
+margins edu, predict(outcome(1))
+marginsplot, xdimension(edu)
+margins edu, predict(outcome(2))
+marginsplot, xdimension(edu)
+
+*** FIN
+*************************************************************
